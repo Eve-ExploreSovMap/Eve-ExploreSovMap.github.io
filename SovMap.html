@@ -381,7 +381,7 @@
 
       function checkFinished() {
         loaded++;
-        loadingStatus.textContent = `Chargement ${loaded}/${dates.length} (${Math.round(loaded / dates.length * 100)}%)`;
+        loadingStatus.textContent = `Chargement ${loaded}/${dates.length *2} (${Math.round(loaded / dates.length * 50)}%)`;
         if (loaded === dates.length) {
           isPreloading = false;
           loadingStatus.textContent = "";

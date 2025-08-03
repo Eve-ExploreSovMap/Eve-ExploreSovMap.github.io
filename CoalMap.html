@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Caolallition Map Explorer</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: #111;
+      color: white;
+      margin: 0;
+      padding: 0;
+    }
+    #mapsContainer {
+      display: flex;
+      justify-content: center;
+      gap: 1em;
+      max-width: 90%;
+      margin: 1em auto;
+      overflow: hidden;
+    }
+    .mapWrapper {
+      border: 2px solid #444;
+      background: #000;
+      cursor: grab;
+      user-select: none;
+      position: relative;
+      width: 2000px;
+      height: 800px;
+      overflow: hidden;
+    }
+    .mapWrapper img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      user-select: none;
+      -webkit-user-drag: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      max-width: none;
+      max-height: none;
+      will-change: transform;
+    }
+    #controls {
+      margin-top: 1em;
+    }
+    input[type="range"] {
+      width: 80%;
+    }
+    label, select {
+      margin: 0 0.5em;
+    }
+    button {
+      padding: 0.5em 1em;
+      margin: 0 0.5em;
+      font-size: 1em;
+    }
+    #dateSelectors {
+      margin-bottom: 1em;
+    }
+    input[type="date"] {
+      padding: 0.3em;
+      font-size: 1em;
+      background: #222;
+      color: white;
+      border: 1px solid #444;
+    }
+    #dateDisplay {
+      font-size: 1.4em;
+      margin-bottom: 0.5em;
+    }
+    #loadingStatus {
+      margin-top: 0.5em;
+      font-size: 1em;
+      color: #bbb;
+    }
+    #presetRanges {
+      position: absolute;
+      top: 1em;
+      right: 1em;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Timeline viewer for EVE Online Sov Maps</h1>
+
+  <div id="presetRanges">
+    <label for="presetSelect">Notable sov changes</label>
+    <select id="presetSelect">
+      <option value="">-- Choisir --</option>
+      <option value="20200704,20210801">World War Bee 2 (04/07/2020 - 01/08/2021)</option>
+    </select>
+  </div>
+
+  <div id="dateSelectors">
+    <label for="startDate">From :</label>
+    <input type="date" id="startDate" />
+    <label for="endDate">to :</label>
+    <input type="date" id="endDate" />
+    <button id="updateRangeBtn">🔁 Apply</button>
+  </div>
+
+  <div id="dateDisplay">...</div>
+
+  <div id="mapsContainer">
+    <div class="mapWrapper" id="mapWrapper1">
+      <img id="map1" src="" alt="Carte principale" draggable="false" />
+    </div>
+  </div>
+
+  <div id="controls">
+    <input type="range" id="dateSlider" min="0" max="0" value="0" />
+    <br /><br />
+    <button id="playBtn">▶️ Play</button>
+    <button id="pauseBtn" disabled>⏸️ Pause</button>
+    <label for="speed">Speed :</label>
+    <select id="speed">
+      <option value="50">0.05s</option>
+      <option value="100">0.1s</option>
+      <option value="250" selected>0.25s</option>
+      <option value="500">0.5s</option>
+      <option value="1000">1s</option>
+      <option value="2000">2s</option>
+      <option value="5000">5s</option>
+    </select>
+  </div>
+
+  <div id="loadingStatus"></div>
+
+  <script>
+    const map1 = document.getElementById('map1');
+    const slider = document.getElementById('dateSlider');
+    const playBtn = document.getElementById('playBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const speedSelect = document.getElementById('speed');
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+    const updateRangeBtn = document.getElementById('updateRangeBtn');
+    const dateDisplay = document.getElementById('dateDisplay');
+    const loadingStatus = document.getElementById('loadingStatus');
+    const presetSelect = document.getElementById('presetSelect');
+    const mapWrapper1 = document.getElementById('mapWrapper1');
+
+
+    const fallbackImage = "joinhorde.png";
+
+    let dates = [];
+    let imagesCache = {};
+
+    let interval = null;
+    let isPreloading = false;
+
+    // Transform state
+    let zoom = 1;
+    let offsetX = 0, offsetY = 0;
+    let isDragging = false, lastX, lastY;
+
+    // Dimensions and constraints for the map display area
+    const containerWidth = mapWrapper1.clientWidth;
+    const containerHeight = mapWrapper1.clientHeight;
+
+    // Original image size (approximate)
+    // const imgNaturalWidth = 1856;  
+    // const imgNaturalHeight = 2048;
+    const imgNaturalWidth = 1800;  // Assumed width of the loaded map images
+    const imgNaturalHeight = 1800; // Assumed height
+
+    // --- UTILS ---
+
+    function formatDate(dateStr) {
+      const year = dateStr.slice(0, 4);
+      const month = dateStr.slice(4, 6);
+      const day = dateStr.slice(6, 8);
+      return `${day}/${month}/${year}`;
+    }
+
+    function buildDateList(start, end) {
+      const list = [];
+      const today = new Date();
+      for (let d = new Date(start); d <= end && d <= today; d.setDate(d.getDate() + 1)) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        list.push(`${yyyy}${mm}${dd}`);
+      }
+      return list;
+    }
+
+    function resizeImageToTarget(imgElement, targetWidth, targetHeight) {
+      // Reset any previous sizing
+      imgElement.style.width = '';
+      imgElement.style.height = '';
+      // Wait for image to be loaded
+      if (!imgElement.complete || !imgElement.naturalWidth) {
+        imgElement.onload = () => resizeImageToTarget(imgElement, targetWidth, targetHeight);
+        return;
+      }
+      const iw = imgElement.naturalWidth;
+      const ih = imgElement.naturalHeight;
+      if (!iw || !ih) return;
+      const scaleW = targetWidth / iw;
+      const scaleH = targetHeight / ih;
+      const scale = Math.max(scaleW, scaleH);
+      imgElement.style.width = `${iw * scale}px`;
+      imgElement.style.height = `${ih * scale}px`;
+    }
+
+    function updateImage(index) {
+      const date = dates[index];
+      const url = imagesCache[date] || `https://verite.space/maps/coalition/Coal${date}.png`;
+      map1.onerror = () => { map1.src = fallbackImage; };
+      map1.src = url;
+      dateDisplay.textContent = formatDate(date);
+      updateUrlParams();
+      // Resize images to at least 1800*1800, keeping proportions
+      setTimeout(() => {
+        resizeImageToTarget(map1, 1800, 1800);
+      }, 50);
+    }
+
+    function initSlider() {
+      slider.max = dates.length - 1;
+      if (slider.value > slider.max) slider.value = slider.max;
+      if (slider.value < 0) slider.value = 0;
+      imagesCache = {};
+      updateImage(slider.value);
+    }
+
+    // --- URL PARAMS ---
+
+    function getUrlParams() {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        start: params.get('start'),
+        end: params.get('end'),
+        current: params.get('current'),
+        zoom: parseFloat(params.get('zoom')),
+        offsetX: parseFloat(params.get('offsetX')),
+        offsetY: parseFloat(params.get('offsetY')),
+      };
+    }
+
+    function updateUrlParams() {
+      const params = new URLSearchParams();
+
+      if (startDateInput.value) {
+        params.set('start', startDateInput.value.replace(/-/g, ''));
+      }
+      if (endDateInput.value) {
+        params.set('end', endDateInput.value.replace(/-/g, ''));
+      }
+      params.set('current', slider.value);
+      params.set('zoom', zoom.toFixed(3));
+      params.set('offsetX', Math.round(offsetX));
+      params.set('offsetY', Math.round(offsetY));
+
+      const newUrl = window.location.pathname + '?' + params.toString();
+      window.history.replaceState({}, '', newUrl);
+    }
+
+    // --- SYNC TRANSFORMATIONS ---
+
+    function clampOffsets(z, ox, oy) {
+      // Clamp offsetX and offsetY so the image stays inside the container bounds
+      // Calculations in pixels, image size * zoom
+      const zoomedWidth = imgNaturalWidth * z;
+      const zoomedHeight = imgNaturalHeight * z;
+
+      // max offset = 0 (no empty space left/top)
+      // min offset = container size - zoomed size (no empty space right/bottom)
+      let minOffsetX = containerWidth - zoomedWidth;
+      let minOffsetY = containerHeight - zoomedHeight;
+
+      // If image smaller than container, center it (offset so empty space is divided)
+      if (minOffsetX > 0) {
+        ox = minOffsetX / 2;
+      } else {
+        if (ox > 0) ox = 0;
+        if (ox < minOffsetX) ox = minOffsetX;
+      }
+      if (minOffsetY > 0) {
+        oy = minOffsetY / 2;
+      } else {
+        if (oy > 0) oy = 0;
+        if (oy < minOffsetY) oy = minOffsetY;
+      }
+      return { ox, oy };
+    }
+
+    function applyTransformTo(imgElement, z, ox, oy) {
+      imgElement.style.transformOrigin = 'top left';
+      imgElement.style.transform = `scale(${z}) translate(${ox / z}px, ${oy / z}px)`;
+    }
+
+    function applyTransform() {
+      // Clamp offsets before applying
+      const clamped = clampOffsets(zoom, offsetX, offsetY);
+      offsetX = clamped.ox;
+      offsetY = clamped.oy;
+
+      applyTransformTo(map1, zoom, offsetX, offsetY);
+    }
+
+    // --- EVENTS ---
+
+    slider.addEventListener('input', () => {
+      updateImage(slider.value);
+    });
+  
+    slider.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const step = e.deltaY > 0 ? 1 : -1;
+    let newValue = parseInt(slider.value) + step;
+    newValue = Math.max(0, Math.min(newValue, dates.length - 1));
+    slider.value = newValue;
+    updateImage(newValue);
+    }, { passive: false });
+
+
+
+
+    pauseBtn.addEventListener('click', () => {
+      clearInterval(interval);
+      playBtn.disabled = false;
+      pauseBtn.disabled = true;
+    });
+
+    speedSelect.addEventListener('change', () => {
+      if (interval) {
+        pauseBtn.click();
+        playBtn.click();
+      }
+    });
+
+    playBtn.addEventListener('click', () => {
+      if (isPreloading) return;
+      isPreloading = true;
+      playBtn.disabled = true;
+      pauseBtn.disabled = true;
+      loadingStatus.textContent = "Caching maps...";
+      imagesCache = {};
+      let loaded = 0;
+      dates.forEach(date => {
+        const url = `https://verite.space/maps/fw/FW${date}.png`;
+        const image = new Image();
+        image.onload = () => {
+          imagesCache[date] = url;
+          checkFinished();
+        };
+        image.onerror = () => {
+          imagesCache[date] = fallbackImage;
+          checkFinished();
+        };
+        image.src = url;
+      
+      });
+
+      function checkFinished() {
+        loaded++;
+        loadingStatus.textContent = `Loading ${loaded}/${dates.length} (${Math.round(loaded / dates.length * 100)}%)`;
+        if (loaded === dates.length) {
+          isPreloading = false;
+          loadingStatus.textContent = "";
+          startPlayback();
+        }
+      }
+    });
+
+    function startPlayback() {
+      let i = parseInt(slider.value);
+      playBtn.disabled = true;
+      pauseBtn.disabled = false;
+      interval = setInterval(() => {
+        updateImage(i);
+        slider.value = i;
+        i++;
+        if (i >= dates.length) {
+          clearInterval(interval);
+          playBtn.disabled = false;
+          pauseBtn.disabled = true;
+        }
+      }, parseInt(speedSelect.value));
+    }
+
+    updateRangeBtn.addEventListener('click', () => {
+      const start = new Date(startDateInput.value);
+      const end = new Date(endDateInput.value);
+      if (start > end) {
+        alert("Start date cannot be after end date.");
+        return;
+      }
+      pauseBtn.click();
+      dates = buildDateList(start, end);
+      initSlider();
+    });
+
+    presetSelect.addEventListener('change', () => {
+      if (!presetSelect.value) return;
+      const [startStr, endStr] = presetSelect.value.split(',');
+      startDateInput.value = `${startStr.slice(0,4)}-${startStr.slice(4,6)}-${startStr.slice(6,8)}`;
+      endDateInput.value = `${endStr.slice(0,4)}-${endStr.slice(4,6)}-${endStr.slice(6,8)}`;
+      updateRangeBtn.click();
+    });
+
+    // --- DRAG & ZOOM ---
+
+    function onPointerDown(e) {
+      isDragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      mapWrapper1.style.cursor = 'grabbing';
+    }
+    function onPointerMove(e) {
+      if (!isDragging) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      offsetX += dx;
+      offsetY += dy;
+      applyTransform();
+    }
+    function onPointerUp(e) {
+      isDragging = false;
+      mapWrapper1.style.cursor = 'grab';
+    }
+
+    mapWrapper1.addEventListener('pointerdown', onPointerDown);
+    mapWrapper1.addEventListener('pointermove', onPointerMove);
+    mapWrapper1.addEventListener('pointerup', onPointerUp);
+    mapWrapper1.addEventListener('pointerleave', onPointerUp);
+
+
+    // Zoom with wheel, centered on mouse position
+    function onWheel(e) {
+      e.preventDefault();
+      const rect = mapWrapper1.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const prevZoom = zoom;
+      const delta = -e.deltaY * 0.0015;
+      let newZoom = zoom * (1 + delta);
+      newZoom = Math.min(Math.max(newZoom, 0.1), 4);
+
+      // Calculate offset to zoom around mouse pointer
+      offsetX -= (mx - offsetX) * (newZoom / prevZoom - 1);
+      offsetY -= (my - offsetY) * (newZoom / prevZoom - 1);
+
+      zoom = newZoom;
+      applyTransform();
+    }
+    mapWrapper1.addEventListener('wheel', onWheel, { passive: false });
+
+    // --- INITIALIZATION ---
+
+    function initialize() {
+      // Load dates from URL or default last 30 days ending yesterday (UTC)
+      const params = getUrlParams();
+
+      let startDate, endDate;
+      if (params.start && params.end) {
+        startDate = new Date(params.start.slice(0,4), params.start.slice(4,6)-1, params.start.slice(6,8));
+        endDate = new Date(params.end.slice(0,4), params.end.slice(4,6)-1, params.end.slice(6,8));
+      } else {
+        const today = new Date();
+        endDate = new Date(today.getTime());
+        endDate.setUTCDate(endDate.getUTCDate() - 1);
+        startDate = new Date(endDate.getTime());
+        startDate.setUTCDate(startDate.getUTCDate() - 29);
+      }
+
+      startDateInput.value = startDate.toISOString().slice(0,10);
+      endDateInput.value = endDate.toISOString().slice(0,10);
+      dates = buildDateList(startDate, endDate);
+
+      initSlider();
+
+      if (params.current && params.current >= 0 && params.current < dates.length) {
+        slider.value = params.current;
+        updateImage(params.current);
+      }
+      zoom = isNaN(params.zoom) ? 0.426 : params.zoom;
+      offsetX = isNaN(params.offsetX) ? 0 : params.offsetX;
+      offsetY = isNaN(params.offsetY) ? 0 : params.offsetY;
+
+      applyTransform();
+    }
+
+    initialize();
+  </script>
+
+<br>
+
+<center>
+<h1>About SovMap Explorer</h1>
+<p><strong>SovMap Explorer</strong> is a timeline viewer for EVE Online sovereignty maps. It allows users to visually explore the history of territorial control in the EVE Online universe, using daily map snapshots from <a href="https://verite.space/" target="_blank">verite.space</a>.</p>
+
+<h2>Credits & Legal</h2>
+<p>>EVE Online and the EVE logo are the registered trademarks of CCP. All rights are reserved worldwide. All other trademarks are the property of their respective owners.
+EVE Online, the EVE logo, EVE and all associated logos and designs are the intellectual property of CCP hf.
+All artwork, screenshots, characters, vehicles, storylines, world facts or other recognizable features of the intellectual property relating to these trademarks are likewise the intellectual property of CCP hf.</p>
+
+<h2>Contact</h2>
+<p>For feedback or suggestions, please contact <a href="https://evewho.com/character/2117000543"><strong>Bbey de Massiac</strong></a> in game (EveMail).</p>
+<p>Yes, obviously in-game ISK donations are appreciated. And no, please, dont copy-paste that client-side project with a wget for yourself, just give the link</p>
+</center>
+
+</body>
+</html>

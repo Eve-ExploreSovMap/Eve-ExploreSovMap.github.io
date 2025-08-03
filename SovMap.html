@@ -118,7 +118,7 @@
   <div id="controls">
     <input type="range" id="dateSlider" min="0" max="0" value="0" />
     <br /><br />
-    <button id="playBtn">▶️ Lire</button>
+    <button id="playBtn">▶️ Play</button>
     <button id="pauseBtn" disabled>⏸️ Pause</button>
     <label for="speed">Speed :</label>
     <select id="speed">
@@ -350,7 +350,7 @@
       isPreloading = true;
       playBtn.disabled = true;
       pauseBtn.disabled = true;
-      loadingStatus.textContent = "Préchargement des images...";
+      loadingStatus.textContent = "Caching maps...";
       imagesCache = {};
       let loaded = 0;
       dates.forEach(date => {
@@ -381,7 +381,7 @@
 
       function checkFinished() {
         loaded++;
-        loadingStatus.textContent = `Chargement ${loaded}/${dates.length *2} (${Math.round(loaded / dates.length * 50)}%)`;
+        loadingStatus.textContent = `Loading ${loaded}/${dates.length *2} (${Math.round(loaded / dates.length * 50)}%)`;
         if (loaded === dates.length) {
           isPreloading = false;
           loadingStatus.textContent = "";
@@ -410,7 +410,7 @@
       const start = new Date(startDateInput.value);
       const end = new Date(endDateInput.value);
       if (start > end) {
-        alert("La date de début doit être antérieure à la date de fin !");
+        alert("Start date cannot be after end date.");
         return;
       }
       pauseBtn.click();

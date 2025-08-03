@@ -297,6 +297,15 @@
       updateImage(slider.value);
     });
 
+    slider.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const step = e.deltaY > 0 ? 1 : -1;
+    let newValue = parseInt(slider.value) + step;
+    newValue = Math.max(0, Math.min(newValue, dates.length - 1));
+    slider.value = newValue;
+    updateImage(newValue);
+    }, { passive: false });
+
     pauseBtn.addEventListener('click', () => {
       clearInterval(interval);
       playBtn.disabled = false;

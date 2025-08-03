@@ -151,7 +151,7 @@
     const mapWrapper1 = document.getElementById('mapWrapper1');
     const mapWrapper2 = document.getElementById('mapWrapper2');
 
-    const fallbackImage = "https://sov.space/maps/influence/influence.png";
+    const fallbackImage = "joinhorde.png";
 
     let dates = [];
     let imagesCache = {};
@@ -195,6 +195,25 @@
       return list;
     }
 
+    function resizeImageToTarget(imgElement, targetWidth, targetHeight) {
+      // Reset any previous sizing
+      imgElement.style.width = '';
+      imgElement.style.height = '';
+      // Wait for image to be loaded
+      if (!imgElement.complete || !imgElement.naturalWidth) {
+        imgElement.onload = () => resizeImageToTarget(imgElement, targetWidth, targetHeight);
+        return;
+      }
+      const iw = imgElement.naturalWidth;
+      const ih = imgElement.naturalHeight;
+      if (!iw || !ih) return;
+      const scaleW = targetWidth / iw;
+      const scaleH = targetHeight / ih;
+      const scale = Math.max(scaleW, scaleH);
+      imgElement.style.width = `${iw * scale}px`;
+      imgElement.style.height = `${ih * scale}px`;
+    }
+
     function updateImage(index) {
       const date = dates[index];
       const url = imagesCache[date] || `https://verite.space/maps/coalition/Coal${date}.png`;
@@ -205,6 +224,11 @@
       map2.src = url2;
       dateDisplay.textContent = formatDate(date);
       updateUrlParams();
+      // Resize images to at least 1856x2048, keeping proportions
+      setTimeout(() => {
+        resizeImageToTarget(map1, 1856, 2048);
+        resizeImageToTarget(map2, 1856, 2048);
+      }, 50);
     }
 
     function initSlider() {
@@ -306,6 +330,9 @@
     updateImage(newValue);
     }, { passive: false });
 
+
+
+    
     pauseBtn.addEventListener('click', () => {
       clearInterval(interval);
       playBtn.disabled = false;
@@ -484,7 +511,7 @@
         slider.value = params.current;
         updateImage(params.current);
       }
-      zoom = isNaN(params.zoom) ? 1 : params.zoom;
+      zoom = isNaN(params.zoom) ? 0.378 : params.zoom;
       offsetX = isNaN(params.offsetX) ? 0 : params.offsetX;
       offsetY = isNaN(params.offsetY) ? 0 : params.offsetY;
 

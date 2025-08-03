@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Visualiseur de Cartes de Coalition</title>
+  <title>Faction Warfare Explorer</title>
   <style>
     body {
       font-family: sans-serif;
@@ -34,7 +34,6 @@
       position: absolute;
       top: 0;
       left: 0;
-      user-drag: none;
       user-select: none;
       -webkit-user-drag: none;
       -webkit-user-select: none;
@@ -90,7 +89,7 @@
   <h1>Timeline viewer for EVE Online Sov Maps</h1>
 
   <div id="presetRanges">
-    <label for="presetSelect">Périodes :</label>
+    <label for="presetSelect">Notable sov changes</label>
     <select id="presetSelect">
       <option value="">-- Choisir --</option>
       <option value="20200704,20210801">World War Bee 2 (04/07/2020 - 01/08/2021)</option>
@@ -98,11 +97,11 @@
   </div>
 
   <div id="dateSelectors">
-    <label for="startDate">De :</label>
+    <label for="startDate">From :</label>
     <input type="date" id="startDate" />
-    <label for="endDate">à :</label>
+    <label for="endDate">to :</label>
     <input type="date" id="endDate" />
-    <button id="updateRangeBtn">🔁 Appliquer la plage</button>
+    <button id="updateRangeBtn">🔁 Apply</button>
   </div>
 
   <div id="dateDisplay">...</div>
@@ -116,9 +115,9 @@
   <div id="controls">
     <input type="range" id="dateSlider" min="0" max="0" value="0" />
     <br /><br />
-    <button id="playBtn">▶️ Lire</button>
+    <button id="playBtn">▶️ Play</button>
     <button id="pauseBtn" disabled>⏸️ Pause</button>
-    <label for="speed">Vitesse :</label>
+    <label for="speed">Speed :</label>
     <select id="speed">
       <option value="50">0.05s</option>
       <option value="100">0.1s</option>
@@ -147,7 +146,7 @@
     const mapWrapper1 = document.getElementById('mapWrapper1');
 
 
-    const fallbackImage = "https://sov.space/maps/influence/influence.png";
+    const fallbackImage = "joinhorde.png";
 
     let dates = [];
     let imagesCache = {};
@@ -167,8 +166,8 @@
     // Original image size (approximate)
     // const imgNaturalWidth = 1856;  
     // const imgNaturalHeight = 2048;
-    const imgNaturalWidth = 1856;  // Assumed width of the loaded map images
-    const imgNaturalHeight = 2048; // Assumed height
+    const imgNaturalWidth = 1800;  // Assumed width of the loaded map images
+    const imgNaturalHeight = 1800; // Assumed height
 
     // --- UTILS ---
 
@@ -191,6 +190,25 @@
       return list;
     }
 
+    function resizeImageToTarget(imgElement, targetWidth, targetHeight) {
+      // Reset any previous sizing
+      imgElement.style.width = '';
+      imgElement.style.height = '';
+      // Wait for image to be loaded
+      if (!imgElement.complete || !imgElement.naturalWidth) {
+        imgElement.onload = () => resizeImageToTarget(imgElement, targetWidth, targetHeight);
+        return;
+      }
+      const iw = imgElement.naturalWidth;
+      const ih = imgElement.naturalHeight;
+      if (!iw || !ih) return;
+      const scaleW = targetWidth / iw;
+      const scaleH = targetHeight / ih;
+      const scale = Math.max(scaleW, scaleH);
+      imgElement.style.width = `${iw * scale}px`;
+      imgElement.style.height = `${ih * scale}px`;
+    }
+
     function updateImage(index) {
       const date = dates[index];
       const url = imagesCache[date] || `https://verite.space/maps/fw/FW${date}.png`;
@@ -198,6 +216,10 @@
       map1.src = url;
       dateDisplay.textContent = formatDate(date);
       updateUrlParams();
+      // Resize images to at least 1800*1800, keeping proportions
+      setTimeout(() => {
+        resizeImageToTarget(map1, 1800, 1800);
+      }, 50);
     }
 
     function initSlider() {
@@ -288,6 +310,18 @@
     slider.addEventListener('input', () => {
       updateImage(slider.value);
     });
+  
+    slider.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const step = e.deltaY > 0 ? 1 : -1;
+    let newValue = parseInt(slider.value) + step;
+    newValue = Math.max(0, Math.min(newValue, dates.length - 1));
+    slider.value = newValue;
+    updateImage(newValue);
+    }, { passive: false });
+
+
+
 
     pauseBtn.addEventListener('click', () => {
       clearInterval(interval);
@@ -307,7 +341,7 @@
       isPreloading = true;
       playBtn.disabled = true;
       pauseBtn.disabled = true;
-      loadingStatus.textContent = "Préchargement des images...";
+      loadingStatus.textContent = "Caching maps...";
       imagesCache = {};
       let loaded = 0;
       dates.forEach(date => {
@@ -327,7 +361,7 @@
 
       function checkFinished() {
         loaded++;
-        loadingStatus.textContent = `Chargement ${loaded}/${dates.length} (${Math.round(loaded / dates.length * 100)}%)`;
+        loadingStatus.textContent = `Loading ${loaded}/${dates.length} (${Math.round(loaded / dates.length * 100)}%)`;
         if (loaded === dates.length) {
           isPreloading = false;
           loadingStatus.textContent = "";
@@ -356,7 +390,7 @@
       const start = new Date(startDateInput.value);
       const end = new Date(endDateInput.value);
       if (start > end) {
-        alert("La date de début doit être antérieure à la date de fin !");
+        alert("Start date cannot be after end date.");
         return;
       }
       pauseBtn.click();
@@ -449,7 +483,7 @@
         slider.value = params.current;
         updateImage(params.current);
       }
-      zoom = isNaN(params.zoom) ? 1 : params.zoom;
+      zoom = isNaN(params.zoom) ? 0.426 : params.zoom;
       offsetX = isNaN(params.offsetX) ? 0 : params.offsetX;
       offsetY = isNaN(params.offsetY) ? 0 : params.offsetY;
 
@@ -462,9 +496,18 @@
 <br>
 
 <center>
-EVE Online and the EVE logo are the registered trademarks of CCP hf. All rights are reserved worldwide. All other trademarks are the property of their respective owners.
+<h1>About SovMap Explorer</h1>
+<p><strong>SovMap Explorer</strong> is a timeline viewer for EVE Online sovereignty maps. It allows users to visually explore the history of territorial control in the EVE Online universe, using daily map snapshots from <a href="https://verite.space/" target="_blank">verite.space</a>.</p>
+
+<h2>Credits & Legal</h2>
+<p>>EVE Online and the EVE logo are the registered trademarks of CCP. All rights are reserved worldwide. All other trademarks are the property of their respective owners.
 EVE Online, the EVE logo, EVE and all associated logos and designs are the intellectual property of CCP hf.
-All artwork, screenshots, characters, vehicles, storylines, world facts or other recognizable features of the intellectual property relating to these trademarks are likewise the intellectual property of CCP hf.
+All artwork, screenshots, characters, vehicles, storylines, world facts or other recognizable features of the intellectual property relating to these trademarks are likewise the intellectual property of CCP hf.</p>
+
+<h2>Contact</h2>
+<p>For feedback or suggestions, please contact <a href="https://evewho.com/character/2117000543"><strong>Bbey de Massiac</strong></a> in game (EveMail).</p>
+<p>Yes, obviously donations are appreciated. And no, please, dont copy-paste that client-side project with a wget for yourself, just give the link</p>
 </center>
+
 </body>
 </html>

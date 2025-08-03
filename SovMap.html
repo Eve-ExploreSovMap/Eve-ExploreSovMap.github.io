@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Visualiseur de Cartes de Coalition</title>
+  <title>SovMap Explorer</title>
   <style>
     body {
       font-family: sans-serif;
@@ -34,7 +34,6 @@
       position: absolute;
       top: 0;
       left: 0;
-      user-drag: none;
       user-select: none;
       -webkit-user-drag: none;
       -webkit-user-select: none;
@@ -90,19 +89,19 @@
   <h1>Timeline viewer for EVE Online Sov Maps</h1>
 
   <div id="presetRanges">
-    <label for="presetSelect">Périodes :</label>
+    <label for="presetSelect">Notable sov changes</label>
     <select id="presetSelect">
-      <option value="">-- Choisir --</option>
+      <option value="">---</option>
       <option value="20200704,20210801">World War Bee 2 (04/07/2020 - 01/08/2021)</option>
     </select>
   </div>
 
   <div id="dateSelectors">
-    <label for="startDate">De :</label>
+    <label for="startDate">From :</label>
     <input type="date" id="startDate" />
-    <label for="endDate">à :</label>
+    <label for="endDate">to :</label>
     <input type="date" id="endDate" />
-    <button id="updateRangeBtn">🔁 Appliquer la plage</button>
+    <button id="updateRangeBtn">🔁 Apply</button>
   </div>
 
   <div id="dateDisplay">...</div>
@@ -121,7 +120,7 @@
     <br /><br />
     <button id="playBtn">▶️ Lire</button>
     <button id="pauseBtn" disabled>⏸️ Pause</button>
-    <label for="speed">Vitesse :</label>
+    <label for="speed">Speed :</label>
     <select id="speed">
       <option value="50">0.05s</option>
       <option value="100">0.1s</option>
@@ -524,9 +523,19 @@
 <br>
 
 <center>
-EVE Online and the EVE logo are the registered trademarks of CCP hf. All rights are reserved worldwide. All other trademarks are the property of their respective owners.
+<h1>About SovMap Explorer</h1>
+<p><strong>SovMap Explorer</strong> is a timeline viewer for EVE Online sovereignty maps. It allows users to visually explore the history of territorial control in the EVE Online universe, using daily map snapshots from <a href="https://verite.space/" target="_blank">verite.space</a>.</p>
+
+<h2>Credits & Legal</h2>
+<p></p>EVE Online and the EVE logo are the registered trademarks of CCP. All rights are reserved worldwide. All other trademarks are the property of their respective owners.
 EVE Online, the EVE logo, EVE and all associated logos and designs are the intellectual property of CCP hf.
-All artwork, screenshots, characters, vehicles, storylines, world facts or other recognizable features of the intellectual property relating to these trademarks are likewise the intellectual property of CCP hf.
+All artwork, screenshots, characters, vehicles, storylines, world facts or other recognizable features of the intellectual property relating to these trademarks are likewise the intellectual property of CCP hf.</p>
 </center>
+
+
+    <h2>Contact</h2>
+    <p>For feedback or suggestions, please contact <a href="https://evewho.com/character/2117000543"><strong>Bbey de Massiac</strong></a> in game (EveMail).</p>
+
+  
 </body>
 </html>
